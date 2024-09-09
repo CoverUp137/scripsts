@@ -1,10 +1,13 @@
-import os
-import requests
-from notify import send
+
 # 视权益价格监控推送
 # 青龙变量: sqyck
 # 自行抓包: 微信公众号---视权益---我的账户。 抓authorization的值
 # authorization 可能时效性
+
+import os
+import requests
+from notify import send
+
 
 authorization = os.getenv('sqyck')
 
