@@ -1,9 +1,9 @@
 import os
 import requests
 from notify import send
-
+# 视权益脚本
 # 青龙变量: sqyck
-# 自行微信抓包 authorization的值
+# 自行抓包: 微信公众号---视权益---我的账户。 抓authorization的值
 # authorization 可能时效性
 
 authorization = os.getenv('sqyck')
