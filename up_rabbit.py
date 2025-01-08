@@ -5,12 +5,11 @@ cron: 1 */5 * * *
 """
 
 import requests
-import time
 
 # 配置项
 BASE_URL = "http://192.168.2.7:1234"  # 后台地址，最后不要带 "/"
-USERNAME = "123456"  # 登录用户名
-PASSWORD = "789846"  # 登录密码
+USERNAME = "212222"  # 登录用户名
+PASSWORD = "6666653"  # 登录密码
 PROXY_LIST = [
     "rabbit.cfyes.tech",
     "mr-orgin.1888866.xyz",
@@ -20,8 +19,6 @@ PROXY_LIST = [
     "log.madrabbit.eu.org",
     "fd.gp.mba:6379",
 ]
-
-GLOBAL_LOCK = False
 
 def login(base_url, username, password):
     url = f"{base_url}/admin/auth"
@@ -57,7 +54,6 @@ def save_config(base_url, token, config):
         print(f"配置保存失败: {e}")
         return False
 
-
 def test_proxy(proxy):
     url = f"http://{proxy}/enc/M"
     try:
@@ -68,14 +64,7 @@ def test_proxy(proxy):
         print(f"测试失败: {proxy}, 错误: {e}")
         return False
 
-
 def replace_proxy(base_url, username, password, proxies):
-    global GLOBAL_LOCK
-    if GLOBAL_LOCK:
-        print("另一个自动更换反代正在运行中")
-        return
-    GLOBAL_LOCK = True
-
     try:
         token = login(base_url, username, password)
         if not token:
@@ -102,9 +91,6 @@ def replace_proxy(base_url, username, password, proxies):
         print("没有找到可用的反代地址")
     except Exception as e:
         print(f"更换反代出错: {e}")
-    finally:
-        GLOBAL_LOCK = False
-
 
 if __name__ == "__main__":
     replace_proxy(BASE_URL, USERNAME, PASSWORD, PROXY_LIST)
