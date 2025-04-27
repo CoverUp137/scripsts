@@ -3,6 +3,8 @@ name: 携趣全自动更换ip
 cron: */5 * * * *
 """
 #代理用完后，ip自动切换列表中的下一个账号
+#如家宽ip变更，则继续绑定之前的套餐，只有套餐剩余ip低于50个，或者用完，白名单ip才会更换到下个套餐
+
 import requests
 import os
 from datetime import datetime
@@ -12,14 +14,15 @@ import re
 
 BASE_URL = "http://op.xiequ.cn"
 ACCOUNTS = [
-    {"uid": "账号1 uid", "ukey": "账号1 key", "remark": "备注"},
-    {"uid": "账号2 uid", "ukey": "账号2 key", "remark": "备注2"},
-     {"uid": "账号3 uid", "ukey": "账号3 key", "remark": "备注3"},
+    {"uid": "账号1", "ukey": "账号1", "remark": "备注"}, 
+    {"uid": "账号2", "ukey": "账号2", "remark": "备注2"},
+
 ]
 
-IP_FILE = "current_ip.txt"
+IP_FILE = "xiequ_ip.txt"
 MAX_RETRIES = 3
 RETRY_DELAY = 2
+MIN_REMAINING_IPS = 50  # 自定义剩余IP阈值，小于这个阀值则更换白名单ip到其他套餐
 
 def print_separator():
     print("\n" + "="*50)
@@ -45,12 +48,10 @@ def print_account_status(account, status):
         else:
             print(f"\n{remark}: 🔴 无有效免费套餐 ({error_msg})")
 
-#获取ip的url列表，可写多个
 def get_public_ip():
     services = [
         "https://ip.3322.net",
-        "https://4.ipw.cn",
-        "http://ip.010504.xyz"
+        "https://4.ipw.cn"
     ]
     for service in services:
         try:
@@ -164,59 +165,96 @@ def save_ip_to_file(ip):
             f.write(ip)
     except:
         print("❌ 保存IP到文件失败")
+
+def find_current_binding_account(current_ip):
+    """查找当前IP绑定的账号"""
+    for account in ACCOUNTS:
+        white_ips = get_white_ips(account)
+        if current_ip in white_ips:
+            return account
+    return None
+
 def manage_ip_allocation(current_ip):
     print_separator()
     print("开始检查各账号状态...")
     
-    for account in ACCOUNTS:
-        status = check_free_package(account)
-        print_account_status(account, status)
-        
-        if status.get('has_free') and status['remaining_ips'] > 0:
-            white_ips = get_white_ips(account)
-            if current_ip in white_ips:
-                print(f"✅ IP {current_ip} 已经绑定到有效账号 {account.get('remark')}，无需操作")
-                return True
+    current_binding = find_current_binding_account(current_ip)
     
-    print_separator()
-    print("开始处理IP分配...")
-    
+    original_binding = None
     for account in ACCOUNTS:
-        status = check_free_package(account)
-        if status.get('error') == "package_exhausted":
-            print(f"检测到账号 {account.get('remark')} 套餐已用完，正在检查白名单...")
-            white_ips = get_white_ips(account)
-            if white_ips:
-                print(f"发现已用完套餐账号 {account.get('remark')} 有绑定IP: {white_ips}")
-                if clear_white_ips(account):
-                    print(f"✅ 已清理 {account.get('remark')} 的白名单IP")
-                else:
-                    print(f"❌ 清理 {account.get('remark')} 白名单失败")
+        white_ips = get_white_ips(account)
+        if white_ips:  
+            original_binding = account
+            break
     
-    for account in ACCOUNTS:
-        status = check_free_package(account)
-        if status.get('has_free') and status['remaining_ips'] > 0:
-            print(f"尝试绑定到账号 {account.get('remark')}...")
-            
-            
-            if not clear_white_ips(account):
-                print(f"❌ 清空白名单失败，跳过此账号")
-                continue
-                
-            if add_white_ip(account, current_ip):
-                if verify_ip_binding(account, current_ip):
-                    print(f"✅ 成功绑定IP到 {account.get('remark')}")
+
+    target_account = current_binding if current_binding else original_binding
+    
+    if target_account:
+        status = check_free_package(target_account)   
+        if status.get('has_free') and status['remaining_ips'] >= MIN_REMAINING_IPS:
+            if not current_binding or current_binding != target_account:
+                print(f"🔄 正在恢复绑定到原账号 {target_account.get('remark')}...")
+                if clear_white_ips(target_account) and add_white_ip(target_account, current_ip):
+                    print(f"✅ 已恢复绑定到 {target_account.get('remark')}")
                     return True
-                else:
-                    print(f"❌ 验证绑定失败")
             else:
-                print(f"❌ 添加IP失败")
+                print(f"✅ 当前IP仍绑定在有效账号 {target_account.get('remark')}，剩余IP充足({status['remaining_ips']})")
+                return True
+        else:
+            print(f"⚠️ 原绑定账号 {target_account.get('remark')} 剩余IP不足({status.get('remaining_ips', 0)})，准备切换...")
     
-    print("❌ 没有找到合适的账号绑定IP")
+   
+    best_account = None
+    max_remaining = 0
+    
+    for account in ACCOUNTS:
+        status = check_free_package(account)
+        if status.get('has_free') and status['remaining_ips'] >= MIN_REMAINING_IPS:
+            if status['remaining_ips'] > max_remaining:
+                max_remaining = status['remaining_ips']
+                best_account = account
+    
+   
+    if best_account is None:
+        for account in ACCOUNTS:
+            status = check_free_package(account)
+            if status.get('has_free'):
+                if status['remaining_ips'] > max_remaining:
+                    max_remaining = status['remaining_ips']
+                    best_account = account
+    
+    if not best_account:
+        print("❌ 没有找到任何有效的套餐账号")
+        return False
+    
+    if target_account and best_account != target_account:
+        print(f"准备从账号 {target_account.get('remark')} 切换到 {best_account.get('remark')}...")
+        if not clear_white_ips(target_account):
+            print(f"❌ 清理原账号白名单失败")
+            return False
+    
+    print(f"尝试绑定到账号 {best_account.get('remark')}...")
+    
+    if not clear_white_ips(best_account):
+        print(f"❌ 清空白名单失败，跳过此账号")
+        return False
+        
+    if add_white_ip(best_account, current_ip):
+        if verify_ip_binding(best_account, current_ip):
+            print(f"✅ 成功绑定IP到 {best_account.get('remark')}")
+            return True
+        else:
+            print(f"❌ 验证绑定失败")
+    else:
+        print(f"❌ 添加IP失败")
+    
     return False
+
 def main():
     print(f"\n携趣多账号自动管理")
-    print(f"## 开始执行... {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    print(f"## 开始执行... {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"最小剩余IP阈值: {MIN_REMAINING_IPS}")
     
     current_ip = get_public_ip()
     if not current_ip:
