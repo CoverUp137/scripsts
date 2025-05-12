@@ -85,7 +85,7 @@ class UnicomQuery:
             f"💰 剩余话费: {result.get('curntbalancecust', '0.00')}元",
             f"💳 本月存入话费: {result.get('freePayFeeTotal', '0.00')}元",
             f"💸 本月已消费: {result.get('realfeecustnew', '0.00')}元",
-            f"📆 上个月结转话费: {result.get('carryOverArrears', '0.00')}元"
+            f"📆 上个月结转话费: {result.get('newCarryForwardFromLastMonth', '0.00')}元"
         ])
 
     def query_traffic(self) -> str:
