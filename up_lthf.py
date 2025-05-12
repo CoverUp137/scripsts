@@ -59,7 +59,7 @@ class UnicomQuery:
 
     def _extract_phone_from_cookie(self) -> str:
         match = re.search(r'c_mobile=(\d{3})(\d{4})(\d{4})', self.cookies or "")
-        return f"{match.group(1)}****{match.group(3)}" if match else "未知"
+        return f"{match.group(1)}****{match.group(3)}" if match else "未知号码"
 
     def _make_request(self, url: str, extra_params: Dict = None) -> Optional[Dict]:
         try:
@@ -98,21 +98,52 @@ class UnicomQuery:
             
         traffic_info = []
         
-        if 'flowSumList' in result:
-            traffic_info.append("🌐 流量类型明细:")
-            for flow in result['flowSumList']:
-                flow_type = {
-                    "1": "📡 通用流量",
-                    "2": "🎯 定向流量",
-                    "3": "🔮 其他流量"
-                }.get(flow.get('flowtype'), "❓ 未知流量")
-                
-                traffic_info.extend([
-                    f"├─ {flow_type}:",
-                    f"│  ├─ 📦 总量: {self._format_flow(flow.get('xtotalvalue', '0'))}",
-                    f"│  ├─ ⏳ 已用: {self._format_flow(flow.get('xusedvalue', '0'))}",
-                    f"│  └─ ✅ 剩余: {self._format_flow(flow.get('xcanusevalue', '0'))}"
-                ])
+        realname_result = self._make_request(
+            "https://m.client.10010.com/servicebusiness/newOrdered/queryOrderRelationship"
+        )
+        if realname_result and realname_result.get("code") == "0000":
+            if username := realname_result.get("data", {}).get("username"):
+                traffic_info.append(f"👤 实名信息: {username}")
+        
+        if 'packageName' in result:
+            traffic_info.append(f"📱 套餐名称: {result['packageName']}")
+        
+        if 'allUserFlow' in result:
+            total_flow = self._format_flow(result['allUserFlow'])
+            traffic_info.append(f"📊 总使用量: {total_flow}")
+        
+        if 'resources' in result:
+            for resource in result['resources']:
+                if resource['type'] == 'flow' and resource['details']:
+                    traffic_info.append("\n📦 流量包明细:")
+                    traffic_info.append("┌" + "─" * 20)
+                    for detail in resource['details']:
+                        if detail.get('hide', False) or not detail.get('feePolicyName'):
+                            continue
+                            
+                        package_name = detail['feePolicyName']
+                        flow_type = {
+                            "1": "📡 通用流量",
+                            "2": "🎯 定向流量",
+                            "3": "🔮 其他流量"
+                        }.get(detail.get('flowType'), "❓ 未知类型")
+                        
+                        total = self._format_flow(detail.get('total', '0'))
+                        used = self._format_flow(detail.get('use', '0'))
+                        remain = self._format_flow(detail.get('remain', '0'))
+                        percent = detail.get('usedPercent', '0')
+                        end_date = "长期有效" if detail.get('endDate') == "长期有效" else detail.get('endDate', '未知')
+                        
+                        traffic_info.extend([
+                            f"│ {flow_type} | {package_name}",
+                            f"│ ├─ 总量: {total}",
+                            f"│ ├─ 已用: {used} ({percent}%)",
+                            f"│ ├─ 剩余: {remain}",
+                            f"│ └─ 有效期: {end_date}",
+                            "├" + "─" * 20
+                        ])
+                    if traffic_info[-1].startswith("├"):
+                        traffic_info[-1] = "└" + "─" * 20
         
         return "\n".join(traffic_info) if traffic_info else "暂无流量明细"
 
@@ -123,34 +154,32 @@ class UnicomQuery:
         
         if not result or result.get("code") != "0000":
             return "❌ 已订购业务查询失败"
-            
-        data = result.get("data", {})
+        
         service_info = []
-        
-        if username := data.get("username"):
-            service_info.append(f"👤 实名信息: {username}")
-        
-        for product in data.get("mainProductInfo", []):
-            if name := product.get("productName", "").strip():
-                service_info.append(f"📦 主套餐: {name}")
-                break
-        
         other_services = list({
             p["productName"].strip() 
-            for p in data.get("otherProductInfo", []) 
+            for p in result.get("data", {}).get("otherProductInfo", []) 
             if p.get("productName")
         })
         
         if other_services:
-            service_info.append("\n📋 已订购业务明细:")
-            service_info.extend(f"{i}️⃣ {s}" for i, s in enumerate(other_services[:15], 1))
+            service_info.append("📋 已订购业务明细:")
+            service_info.append("┌" + "─" * 20)
+            for i, s in enumerate(other_services[:15], 1):
+                service_info.append(f"│ {i}️⃣ {s}")
+            service_info.append("└" + "─" * 20)
         
-        return "\n".join(service_info) if service_info else "暂无其他业务"
+        return "\n".join(service_info) if other_services else "暂无其他业务"
 
     def _format_flow(self, flow_str: str) -> str:
         try:
             flow = float(flow_str)
-            return f"{flow/1024:.2f}GB" if flow >= 1024 else f"{flow:.2f}MB"
+            if flow >= 1024 * 1024:  # TB
+                return f"{flow/(1024*1024):.2f}TB"
+            elif flow >= 1024:  # GB
+                return f"{flow/1024:.2f}GB"
+            else:  # MB
+                return f"{flow:.2f}MB"
         except ValueError:
             return "0.00MB"
 
@@ -174,7 +203,7 @@ def main():
     
     for i, cookie in enumerate(cookies_list, 1):
         query = UnicomQuery(cookie=cookie)
-        print(f"\n🔍 {'='*15} 正在查询第 {i} 个账号 ({query.phone}) {'='*15} 🔍")
+        print(f"\n🔍 {'='*50} 正在查询第 {i} 个账号 ({query.phone}) {'='*50} 🔍")
         
         balance = query.query_balance()
         traffic = query.query_traffic()
@@ -182,12 +211,13 @@ def main():
         
         print(f"\n💳 话费查询结果:\n{balance}")
         print(f"\n📶 流量查询结果:\n{traffic}")
-        print(f"\n📋 套餐详情:\n{services}")
+        if services != "暂无其他业务":
+            print(f"\n{services}")
         
         query.send_notification(
             title=f"📱 联通账号{i}({query.phone})查询结果",
             content=f"【💳 话费信息】\n{balance}\n\n【📶 流量信息】\n{traffic}" + 
-                   (f"\n\n【📋 业务信息】\n{services}" if services != "暂无其他业务" else "")
+                   (f"\n\n{services}" if services != "暂无其他业务" else "")
         )
         
         print(f"\n✅ 第 {i} 个账号查询完成")
