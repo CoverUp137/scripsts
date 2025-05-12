@@ -78,14 +78,15 @@ class UnicomQuery:
         
         if not result:
             return "❌ 话费查询失败"
-            
+        unreturned_fee = result.get('uAndF', result.get('feefrozen', '0.00'))
         return "\n".join([
             f"🕒 查询时间: {result.get('queryTime', '未知')}",
             f"📱 手机号码: {self.phone}",
             f"💰 剩余话费: {result.get('curntbalancecust', '0.00')}元",
             f"💳 本月存入话费: {result.get('freePayFeeTotal', '0.00')}元",
             f"💸 本月已消费: {result.get('realfeecustnew', '0.00')}元",
-            f"📆 上个月结转话费: {result.get('newCarryForwardFromLastMonth', '0.00')}元"
+            f"📆 上个月结转话费: {result.get('newCarryForwardFromLastMonth', '0.00')}元",
+            f"⏳ 未使用的定向话费: {unreturned_fee}元"
         ])
 
     def query_traffic(self) -> str:
