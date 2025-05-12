@@ -165,7 +165,7 @@ class UnicomQuery:
         if other_services:
             service_info.append("📋 已订购业务明细:")
             service_info.append("┌" + "─" * 20)
-            for i, s in enumerate(other_services[:15], 1):
+            for i, s in enumerate(other_services[:30], 1):
                 service_info.append(f"│ {i}️⃣ {s}")
             service_info.append("└" + "─" * 20)
         
