@@ -127,17 +127,14 @@ class UnicomQuery:
         data = result.get("data", {})
         service_info = []
         
-        # 实名信息
         if username := data.get("username"):
             service_info.append(f"👤 实名信息: {username}")
         
-        # 主套餐
         for product in data.get("mainProductInfo", []):
             if name := product.get("productName", "").strip():
                 service_info.append(f"📦 主套餐: {name}")
                 break
         
-        # 其他业务
         other_services = list({
             p["productName"].strip() 
             for p in data.get("otherProductInfo", []) 
@@ -179,17 +176,14 @@ def main():
         query = UnicomQuery(cookie=cookie)
         print(f"\n🔍 {'='*15} 正在查询第 {i} 个账号 ({query.phone}) {'='*15} 🔍")
         
-        # 执行查询
         balance = query.query_balance()
         traffic = query.query_traffic()
         services = query.query_ordered_services()
         
-        # 打印结果
         print(f"\n💳 话费查询结果:\n{balance}")
         print(f"\n📶 流量查询结果:\n{traffic}")
         print(f"\n📋 套餐详情:\n{services}")
         
-        # 发送通知
         query.send_notification(
             title=f"📱 联通账号{i}({query.phone})查询结果",
             content=f"【💳 话费信息】\n{balance}\n\n【📶 流量信息】\n{traffic}" + 
