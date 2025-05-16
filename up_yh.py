@@ -13,7 +13,7 @@ import os
 
 yaohuo = os.getenv('yhck')
 
-URL = "https://yaohuo.me/bbs/book_list.aspx?gettotal=2024&action=new"
+URL = "https://yaohuo.me/bbs/book_list.aspx?gettotal=2025&action=new"
 
 HEADERS = {
     "Host": "yaohuo.me",
